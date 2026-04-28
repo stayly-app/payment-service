@@ -27,12 +27,18 @@ public class BookingEventListener {
     @Transactional
     public void onBookingConfirmed(String message) {
         try {
-            JsonNode root = objectMapper.readTree(message);
+            // Extraer mensaje del envelope SNS
+            JsonNode envelope = objectMapper.readTree(message);
+            String actualMessage = envelope.has("Message")
+                    ? envelope.path("Message").asText()
+                    : message;
+
+            JsonNode root = objectMapper.readTree(actualMessage);
             JsonNode payload = root.path("payload");
 
             UUID bookingId = UUID.fromString(payload.path("bookingId").asText());
 
-            // Idempotencia — verificar si el pago ya fue procesado
+            // Idempotencia
             if (paymentRepository.existsByBookingId(bookingId)) {
                 log.info("Payment already processed for bookingId: {}, skipping", bookingId);
                 return;
@@ -43,7 +49,6 @@ public class BookingEventListener {
             UUID roomId = UUID.fromString(payload.path("roomId").asText());
             BigDecimal totalAmount = new BigDecimal(payload.path("totalAmount").asText());
 
-            // Simular procesamiento de pago
             log.info("Processing payment for bookingId: {}", bookingId);
             boolean paymentSuccess = processPayment(totalAmount);
 
@@ -66,9 +71,8 @@ public class BookingEventListener {
         }
     }
 
-    // Simulación de cobro — aquí se integraría Stripe/Conekta
     private boolean processPayment(BigDecimal amount) {
         log.info("Simulating payment processing for amount: {}", amount);
-        return true; // siempre exitoso por ahora
+        return true;
     }
 }
